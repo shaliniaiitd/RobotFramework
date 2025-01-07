@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.1.1 (Python 3.13.1 on win32)" generated="2024-12-15T18:39:43.142872" rpa="false" schemaversion="5">
+<suite id="s1" name="Sakura" source="C:\Users\P7167444\PycharmProjects\RobotFramework\Sakura.robot">
+<test id="s1-t1" name="Open Sakura Homepage" line="5">
+<kw name="Open Browser" owner="SeleniumLibrary">
+<msg time="2024-12-15T18:39:43.456949" level="INFO">Opening browser 'chrome' to base url 'https://datatables.net/examples/data_sources/server_side'.</msg>
+<arg>https://datatables.net/examples/data_sources/server_side</arg>
+<arg>chrome</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="PASS" start="2024-12-15T18:39:43.456657" elapsed="6.509992"/>
+</kw>
+<kw name="Sleep" owner="BuiltIn">
+<msg time="2024-12-15T18:39:54.967928" level="INFO">Slept 5 seconds.</msg>
+<arg>5 seconds</arg>
+<doc>Pauses the test executed for the given time.</doc>
+<status status="PASS" start="2024-12-15T18:39:49.967001" elapsed="5.001661"/>
+</kw>
+<kw name="Close Browser" owner="SeleniumLibrary">
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2024-12-15T18:39:54.969360" elapsed="2.194945"/>
+</kw>
+<status status="PASS" start="2024-12-15T18:39:43.455686" elapsed="13.709113"/>
+</test>
+<status status="PASS" start="2024-12-15T18:39:43.157788" elapsed="14.008684"/>
+</suite>
+<statistics>
+<total>
+<stat pass="1" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat pass="1" fail="0" skip="0" id="s1" name="Sakura">Sakura</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Rebot 7.1.1 (Python 3.13.1 on win32)" generated="2024-12-16T12:40:33.375997" rpa="false" schemaversion="5">
+<suite id="s1" name="open yahooDDT" source="C:\Users\P7167444\PycharmProjects\RobotFramework\open_yahooDDT.robot">
+<test id="s1-t1" name="Open Yahoo in Edge" line="9">
+<kw name="Open Yahoo Template">
+<kw name="Open Browser" owner="SeleniumLibrary">
+<msg time="2024-12-16T12:40:01.212729" level="INFO">Opening browser 'edge' to base url 'https://www.yahoo.com'.</msg>
+<arg>${URL}</arg>
+<arg>${BROWSER}</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="PASS" start="2024-12-16T12:40:01.212456" elapsed="6.936687"/>
+</kw>
+<kw name="Sleep" owner="BuiltIn">
+<msg time="2024-12-16T12:40:10.150244" level="INFO">Slept 2 seconds.</msg>
+<arg>2 seconds</arg>
+<doc>Pauses the test executed for the given time.</doc>
+<status status="PASS" start="2024-12-16T12:40:08.149367" elapsed="2.001009"/>
+</kw>
+<kw name="Close Browser" owner="SeleniumLibrary">
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2024-12-16T12:40:10.150569" elapsed="2.318572"/>
+</kw>
+<arg>edge</arg>
+<status status="PASS" start="2024-12-16T12:40:01.211725" elapsed="11.257725"/>
+</kw>
+<status status="PASS" start="2024-12-16T12:40:01.211170" elapsed="11.258708"/>
+</test>
+<test id="s1-t2" name="Open Yahoo in Chrome" line="10">
+<kw name="Open Yahoo Template">
+<kw name="Open Browser" owner="SeleniumLibrary">
+<msg time="2024-12-16T12:40:12.472972" level="INFO">Opening browser 'chrome' to base url 'https://www.yahoo.com'.</msg>
+<arg>${URL}</arg>
+<arg>${BROWSER}</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="PASS" start="2024-12-16T12:40:12.472367" elapsed="8.172463"/>
+</kw>
+<kw name="Sleep" owner="BuiltIn">
+<msg time="2024-12-16T12:40:22.646051" level="INFO">Slept 2 seconds.</msg>
+<arg>2 seconds</arg>
+<doc>Pauses the test executed for the given time.</doc>
+<status status="PASS" start="2024-12-16T12:40:20.645210" elapsed="2.001043"/>
+</kw>
+<kw name="Close Browser" owner="SeleniumLibrary">
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2024-12-16T12:40:22.646515" elapsed="2.336316"/>
+</kw>
+<arg>chrome</arg>
+<status status="PASS" start="2024-12-16T12:40:12.471490" elapsed="12.511563"/>
+</kw>
+<status status="PASS" start="2024-12-16T12:40:12.470678" elapsed="12.512629"/>
+</test>
+<test id="s1-t3" name="Open Yahoo in Firefox firefox" line="11">
+<status status="FAIL" start="2024-12-16T12:40:24.983883" elapsed="0.001404">Test cannot be empty.</status>
+</test>
+<doc>[https://pabot.org/?ref=log|Pabot] result from 1 executions.</doc>
+<status status="FAIL" start="2024-12-16T12:40:00.904000" elapsed="23.773000"/>
+</suite>
+<statistics>
+<total>
+<stat pass="2" fail="1" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat pass="2" fail="1" skip="0" id="s1" name="open yahooDDT">open yahooDDT</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
