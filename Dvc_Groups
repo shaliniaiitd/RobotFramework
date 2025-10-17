@@ -1,0 +1,66 @@
+*** Settings ***
+Suite Setup       Setup Suite
+Suite Teardown    Teardown Suite
+Library           ../RequestTools.py    ${SUT}    ${ENCODING}
+Resource          ../resources/Common.txt
+Library           ../AdvancedTools.py    ${SUT}    ${ENCODING}
+
+*** Test Cases ***
+GET without permission
+    request    get    /device_category?limit=20    ${API_USERNAME}    ${API_USERPASS}
+    ${returned}=    Get Payload Item    total_returned
+    Should Be True    ${returned} > 0
+
+Can't GET specific resource without permission
+    [Tags]    negative
+    ${cat}=    Grab Random Resource    /device_category
+    request    get    ${cat}    ${API_USERNAME}    ${API_USERPASS}
+    HTTP response code should be    403
+
+Can't GET Extended without permission
+    [Tags]    negative
+    request    get    /device_category?limit=20&extended_fetch=1    ${API_USERNAME}    ${API_USERPASS}
+    HTTP response code should be    403
+
+Can't override description without permission
+    [Tags]    negative
+    request    get    /device_category?limit=20&link_disp_field=message    ${API_USERNAME}    ${API_USERPASS}
+    HTTP response code should be    403
+
+Extended fetch match
+    [Documentation]    TID 16928 (Fixed)
+    [Tags]    extended    defect
+    Extended fetch matches direct query    /device_category
+
+Filtered extended match
+    [Documentation]    TID 16928 (Fixed)
+    [Tags]    extended    filter    defect
+    Filtered extended fetch matches direct query    /device_category    &filter.cat_name.contains=Environmental
+
+Root resource returns search spec
+    [Documentation]    TID 16643 (Fixed)
+    [Tags]    spec    defect
+    Resource returns search spec    /device_category
+
+Unfiltered sorting (ASC)
+    [Documentation]    TID 13726 (Fixed)
+    [Tags]    sort    defect
+    ${string}=    Create List    guid
+    verify sort    /device_category    STRING_VALS=${string}
+
+Unfiltered sorting (DESC)
+    [Documentation]    TID 13726 (Fixed)
+    [Tags]    sort    defect
+    ${string}=    Create List    guid
+    verify sort    /device_category    DESC    STRING_VALS=${string}
+
+*** Keywords ***
+Setup Suite
+    ${API_USER}    ${API_USERNAME}    ${API_USERPASS}=    Create API-key Only User
+    Set suite variable    ${API_USER}
+    Set suite variable    ${API_USERNAME}
+    Set suite variable    ${API_USERPASS}
+
+Teardown Suite
+    Delete API-key Only User
+
