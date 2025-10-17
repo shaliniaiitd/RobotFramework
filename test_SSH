@@ -1,0 +1,187 @@
+** Settings ***
+Suite Setup       Setup Suite
+Suite Teardown    Teardown Suite
+Library           ../../RequestTools.py    ${SUT}    ${ENCODING}
+Resource          ../../resources/Common.txt
+Library           ../../AdvancedTools.py    ${SUT}    ${ENCODING}
+Resource          ../../resources/Utils-Credentials.txt
+
+*** Test Cases ***
+Create SSH credential
+    Add to payload    cred_name    SSH Cred
+    request    post    /credential/ssh
+    HTTP response code should be    201
+    ${SSH_CRED}=    get uri
+    Set suite variable    ${SSH_CRED}
+
+POST Unchanged
+    [Documentation]    TID 15575
+    [Tags]    defect    noncritical
+    POST no changes    ${SSH_CRED}
+
+GET without permission
+    [Documentation]    TID 17930 (Fixed)
+    [Tags]    defect
+    request    get    /credential/ssh?limit=20    ${API_USERNAME}    ${API_USERPASS}
+    ${returned}=    Get Payload Item    total_returned
+    Should Be True    ${returned} > 0
+
+Can't GET specific resource without permission
+    [Tags]    negative
+    request    get    ${SSH_CRED}    ${API_USERNAME}    ${API_USERPASS}
+    HTTP response code should be    403
+
+Can't GET Extended without permission
+    [Tags]    negative
+    request    get    /credential/ssh?limit=20&extended_fetch=1    ${API_USERNAME}    ${API_USERPASS}
+    HTTP response code should be    403
+
+Can't override description without permission
+    [Tags]    negative
+    request    get    /credential/ssh?limit=20&link_disp_field=message    ${API_USERNAME}    ${API_USERPASS}
+    HTTP response code should be    403
+
+Unfiltered sorting (ASC)
+    [Documentation]    TID 16957
+    [Tags]    sort    defect    noncritical
+    verify sort    /credential/ssh    ASC
+
+Unfiltered sorting (DESC)
+    [Documentation]    TID 16957
+    [Tags]    sort    defect    noncritical
+    verify sort    /credential/ssh    DESC
+
+GET new credential
+    request    get    ${SSH_CRED}
+    HTTP response code should be    200
+    ${NEW_SSH}=    Save response payload
+    Set suite variable    ${NEW_SSH}
+
+Update cred_name
+    Update attribute should succeed    cred_name    GLaDOS Cred    ${SSH_CRED}
+
+Update cred_user
+    Update attribute should succeed    cred_user    GLaDOS    ${SSH_CRED}
+
+Update cred_pwd
+    Update attribute should succeed    cred_pwd    youmonster    ${SSH_CRED}
+
+Update cred_host
+    Update attribute should succeed    cred_host    127.0.0.1    ${SSH_CRED}
+
+Update cred_port
+    Update attribute should succeed    cred_port    4500    ${SSH_CRED}
+
+Update cred_timeout
+    Update attribute should succeed    cred_timeout    6000    ${SSH_CRED}
+
+Update updated_by
+    ${em7admin}=    catenate    SEPARATOR=    ${PREFIX}    /account/1
+    Update attribute should succeed    updated_by    ${em7admin}    ${SSH_CRED}
+
+Update cred_guid
+    Update attribute should succeed    cred_guid    FA1AFE1    ${SSH_CRED}
+
+Update edit_date
+    Update attribute should succeed    edit_date    1234567890    ${SSH_CRED}
+
+Update all_orgs
+    Update attribute should succeed    all_orgs    0    ${SSH_CRED}
+
+Update ssh_key_data
+    Update attribute should succeed    ssh_key_data    fake_key    ${SSH_CRED}
+
+Update aligned_organizations
+    [Documentation]    TID 13860
+    [Tags]    defect    noncritical
+    ${org_list}=    Create list    ${NEW_ORG}
+    Update attribute should succeed    aligned_organizations    ${org_list}    ${SSH_CRED}
+
+Root resource seturns search spec
+    [Documentation]    TID 16643 (Fixed)
+    [Tags]    spec    defect
+    Resource returns search spec    /credential/ssh
+
+Extended fetch match
+    [Documentation]    TID 17238 (Fixed)
+    [Tags]    extended    defect
+    Extended fetch matches direct query    /credential/ssh
+
+Filtered extended fetch match
+    [Documentation]    TID 17238 (Fixed)
+    [Tags]    extended    filter    defect
+    Filtered extended fetch matches direct query    /credential/ssh    &filter.cred_name=GLaDOS Cred
+
+Compare releases - resource
+    [Tags]    compare
+    compare api resource    ${SSH_CRED}    ${RELEASE}    ${BUILD}    compare_build=${COMPARE_BUILD}
+
+Compare releases - headers
+    [Tags]    compare
+    compare api headers    ${SSH_CRED}    ${RELEASE}    ${BUILD}    compare_build=${COMPARE_BUILD}
+
+Compare releases - spec
+    [Documentation]    TID 16643 (Fixed)
+    [Tags]    compare    spec    defect
+    compare api spec    ${SSH_CRED}    ${RELEASE}    ${BUILD}    compare_build=${COMPARE_BUILD}
+
+PUT original credential
+    [Documentation]    TID 15077
+    [Tags]    defect    noncritical
+    request with payload    put    ${SSH_CRED}    ${NEW_SSH}
+    HTTP response code should be    200
+
+DELETE SSH Credential
+    request    delete    ${SSH_CRED}
+    HTTP response code should be    200
+
+*** Keywords ***
+Setup Suite
+    ${API_USER}    ${API_USERNAME}    ${API_USERPASS}=    Create API-key Only User
+    Set suite variable    ${API_USER}
+    Set suite variable    ${API_USERNAME}
+    Set suite variable    ${API_USERPASS}
+    ${NEW_ORG}=    Create Org    Aperture Science
+    set suite variable    ${NEW_ORG}
+    @{SSH_URI_List}=    Create List
+    : FOR    ${index}    IN RANGE    20
+    \    ${NEW_ssh_1}=    _Create_Fixture_SSHCred
+    \    Append To List    ${SSH_URI_List}    ${NEW_ssh_1}
+    Set Suite Variable    @{SSH_URI_List}
+
+Teardown Suite
+    Delete API-key Only User
+    request    delete    ${NEW_ORG}
+    HTTP response code should be    200
+    : FOR    ${URI}    IN    @{SSH_URI_List}
+    \    _Delete_Fixture_SSHCred    ${URI}
+
+_Create_Fixture_SSHCred
+    #Generating a ssh Cred Name, User Name and Valid Password
+    ${_ssh_cred_name}=    Credentials_Create_Random_User_Name
+    Add To Payload    cred_name    ${_ssh_cred_name}
+    ${_ssh_cred_user_name}=    Credentials_Create_Random_User_Name
+    Add To Payload    cred_user    ${_ssh_cred_user_name}
+    ${_ssh_cred_DB_password}=    Credentials_Create_Random_Valid_Password
+    Add To Payload    cred_pwd    ${_ssh_cred_DB_password}
+    #Generating random Host Ip
+    ${_ssh_cred_ip}=    Credentails_Create_Random_Host_IP
+    Add To Payload    cred_host    ${_ssh_cred_ip}
+    #Generating Port Number
+    ${_ssh_cred_port}=    Credentials_Create_Random_Port
+    Add To Payload    cred_port    ${_ssh_cred_port}
+    #Selecting a Random Time out
+    ${_ssh_cred_timeout}=    Credentials_Create_Random_Timeout
+    Add To Payload    cred_timeout    ${_ssh_cred_timeout}
+    #Adding a Private Key
+    ${_ssh_cred_private_key}=    Credentials_Create_Random_Valid_Password
+    Add To Payload    ssh_key_data    ${_ssh_cred_private_key}
+    request    post    /credential/ssh
+    HTTP response code should be    201
+    ${SSH_URI}=    get uri
+    [Return]    ${SSH_URI}
+
+_Delete_Fixture_SSHCred
+    [Arguments]    ${SSH_URI}
+    request    delete    ${SSH_URI}
+    HTTP response code should be    200
