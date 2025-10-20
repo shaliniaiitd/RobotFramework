@@ -1,0 +1,35 @@
+*** Settings ***
+Suite Setup
+Suite Teardown
+Resource          mt_common.txt
+
+*** Test Cases ***
+Verify simple multitenantcy
+    [Documentation]    TID17700
+    ...
+    ...    Create a User Account in ORG1 as the MT_USER1 account.
+    ...
+    ...    Verify MT_USER1 can access.
+    ...
+    ...    Verify MT_USER2 cannot access (no org membership)
+    ...
+    ...    Verify MT_USER3 can access (member of both ORG1 & 2)
+    ...
+    ...    Delete testuser1 account as MT_USER1
+    [Tags]    defect    noncritical
+    Add to payload    user    multi_tenant_user
+    Add to payload    organization    ${ORG1}
+    request    post    /account    ${MT_USER1}    ${MT_PASS1}
+    HTTP response code should be    201
+    ${uri}    get uri
+    Set Suite Variable    ${uri}    ${uri}
+    request    get    ${uri}    ${MT_USER1}    ${MT_PASS1}
+    HTTP response code should be    200
+    Check response payload    organization    ${ORG1}
+    request    get    ${uri}    ${MT_USER2}    ${MT_PASS2}
+    HTTP response code should be    403
+    request    get    ${uri}    ${MT_USER3}    ${MT_PASS3}
+    HTTP response code should be    200
+    [Teardown]    Cleanup API Object    ${uri}
+
+*** Keywords ***
