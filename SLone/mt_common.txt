@@ -1,0 +1,95 @@
+*** Settings ***
+Resource          ../resources/Common.txt
+
+*** Variables ***
+${MT_USER1}       mt_user1
+${MT_PASS1}       abcd1234
+${MT_USER2}       mt_user2
+${MT_PASS2}       abcd1234
+${MT_USER3}       mt_user3
+${MT_PASS3}       abcd1234
+${MT_USER4}       mt_user4_ticket
+${MT_PASS4}       abcd1234
+${MT_USER5}       mt_user5_ticket
+${MT_PASS5}       abcd1234
+${MT_USER6}       mt_user6_ticket
+${MT_PASS6}       abcd1234
+
+*** Keywords ***
+Cleanup API Object
+    [Arguments]    ${uri}
+    request    delete    ${uri}    ${MT_USER1}    ${MT_PASS1}
+
+Get SNMP Credential URI with Name As
+    [Arguments]    ${SnmpNameWithSpaces}
+    ${SnmpNameWithSpaces}    Evaluate    '${SnmpNameWithSpaces}'.replace(' ','%20')
+    request    get    /credential/snmp?limit=1&extended_fetch=1&filter.cred_name=${SnmpNameWithSpaces}
+    ${results}=    result set search
+    ${SNMP_CRED}=    evaluate    ${results}[0]
+    [Return]    ${SNMP_CRED}
+
+Get Org URI based on Name
+    [Arguments]    ${OrgNameWithSpaces}
+    ${OrgNameWithSpaces}    Evaluate    '${OrgNameWithSpaces}'.replace(' ','%20')
+    ${properUri}    Build prefixed uri list    /organization?limit=1&extended_fetch=1&filter.company=${OrgNameWithSpaces}
+    ${properUri}=    evaluate    ${properUri}[0]
+    request    get    ${properUri}
+    ${results}=    result set search
+    ${OrgURI}=    evaluate    ${results}[0]
+    [Return]    ${OrgURI}
+
+Verify discovery session is inactive
+    [Documentation]    TID 16028
+    request    get    ${DISC_SESSION_A}    ${None}    ${None}    ${false}
+    HTTP response code should be    303
+
+Discover Device in IP list for Org uri As
+    [Arguments]    ${IP_List}    ${SNMPCred}    ${OrgURI}
+    Comment    # Get URI from Org Name
+    Comment    ${OrgNameWithSpaces}    Evaluate    '${OrgNameWithSpaces}'.replace(' ','%20')
+    Comment    ${properUri}    Build prefixed uri list    /organization?limit=1&extended_fetch=1&filter.company=${OrgNameWithSpaces}
+    Comment    ${properUri}=    evaluate    ${properUri}[0]
+    Comment    request    get    ${properUri}
+    Comment    ${results}=    result set search
+    Comment    ${OrgURI}=    evaluate    ${results}[0]
+    #
+    ${SNMP_CRED}=    Get SNMP Credential URI with Name As    ${SNMPCred}
+    ${StartIP}    Collections.Get From List    ${IP_List}    0
+    ${EndIP}    Collections.Get From List    ${IP_List}    -1
+    #
+    ${DISC_SESS_PAYLOAD}    Create discovery session payload    ${SNMP_CRED}    ${OrgURI}    ${StartIP}    ${EndIP}
+    request with payload    post    /discovery_session_active    ${DISC_SESS_PAYLOAD}
+    HTTP response code should be    201
+    ${DISC_SESSION_A}=    get uri
+    set suite variable    ${DISC_SESSION_A}
+    ${DISC_SESSION}=    evaluate    '${DISC_SESSION_A}'.replace("_active", "")
+    set suite variable    ${DISC_SESSION}
+    ${DISC_RESP_PAYLOAD}=    save response payload
+    Log    ${DISC_RESP_PAYLOAD}
+    set suite variable    ${DISC_RESP_PAYLOAD}
+    wait until keyword succeeds    180    5    Verify discovery session is inactive
+
+Discover Device in IP list for Org name As
+    [Arguments]    ${IP_List}    ${SNMPCred}    ${ORGNameWithSpaces}=System
+    # Get URI from Org Name
+    ${OrgNameWithSpaces}    Evaluate    '${OrgNameWithSpaces}'.replace(' ','%20')
+    ${properUri}    Build prefixed uri list    /organization?limit=1&extended_fetch=1&filter.company=${OrgNameWithSpaces}
+    ${properUri}=    evaluate    ${properUri}[0]
+    request    get    ${properUri}
+    ${results}=    result set search
+    ${OrgURI}=    evaluate    ${results}[0]
+    #
+    ${SNMP_CRED}=    Get SNMP Credential URI with Name As    ${SNMPCred}
+    ${StartIP}    Collections.Get From List    ${IP_List}    0
+    ${EndIP}    Collections.Get From List    ${IP_List}    -1
+    #
+    ${DISC_SESS_PAYLOAD}    Create discovery session payload    ${SNMP_CRED}    ${OrgURI}    ${StartIP}    ${EndIP}
+    request with payload    post    /discovery_session_active    ${DISC_SESS_PAYLOAD}
+    HTTP response code should be    201
+    ${DISC_SESSION_A}=    get uri
+    set suite variable    ${DISC_SESSION_A}
+    ${DISC_SESSION}=    evaluate    '${DISC_SESSION_A}'.replace("_active", "")
+    set suite variable    ${DISC_SESSION}
+    ${DISC_RESP_PAYLOAD}=    save response payload
+    set suite variable    ${DISC_RESP_PAYLOAD}
+    wait until keyword succeeds    180    5    Verify discovery session is inactive
