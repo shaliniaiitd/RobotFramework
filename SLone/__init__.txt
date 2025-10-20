@@ -1,0 +1,103 @@
+*** Settings ***
+Suite Setup       Setup Suite
+Suite Teardown    Teardown Suite
+Resource          ../resources/Common.txt
+Resource          mt_common.txt
+Library           ../DatabaseTools.py    ${SUT}
+Library           ../MiscTools.py
+
+*** Keywords ***
+Setup Suite
+    [Documentation]    Create 2 Orgs with a grant all user in each org.
+    ...
+    ...    Create an additional grant all user that is a member of both orgs.
+    Setup API Suite.
+    ###
+    ${ORG1}=    Create Org    ORG1
+    ${ORG2}=    Create Org    ORG2
+    set global variable    ${ORG1}
+    set global variable    ${ORG2}
+    #Clean Up Prev Users if some left over
+    ${Status}    ${TESTUSER1}    Run Keyword And Ignore Error    Get Device URI    /account?limit=1&filter.user=multi_tenant_user
+    ${Status}    ${USER1}    Run Keyword And Ignore Error    Get Device URI    /account?limit=1&filter.user=mt_user1
+    ${Status}    ${USER2}    Run Keyword And Ignore Error    Get Device URI    /account?limit=1&filter.user=mt_user2
+    ${Status}    ${USER3}    Run Keyword And Ignore Error    Get Device URI    /account?limit=1&filter.user=mt_user3
+    ${Status}    ${USER4_ticket}    Run Keyword And Ignore Error    Get Device URI    /account?limit=1&filter.user=mt_user4_ticket
+    ${Status}    ${USER5_ticket}    Run Keyword And Ignore Error    Get Device URI    /account?limit=1&filter.user=mt_user5_ticket
+    ${Status}    ${USER6_ticket}    Run Keyword And Ignore Error    Get Device URI    /account?limit=1&filter.user=mt_user6_ticket
+    #
+    Run Keyword And Ignore Error    request    delete    ${TESTUSER1}
+    Run Keyword And Ignore Error    request    delete    ${USER1}
+    Run Keyword And Ignore Error    request    delete    ${USER2}
+    Run Keyword And Ignore Error    request    delete    ${USER3}
+    Run Keyword And Ignore Error    request    delete    ${USER4_ticket}
+    Run Keyword And Ignore Error    request    delete    ${USER5_ticket}
+    Run Keyword And Ignore Error    request    delete    ${USER6_ticket}
+    #
+    Comment    ${ticket_key_id}=    Find key    Grant All
+    Comment    @{perm_keys}=    Build prefixed URI list    /permission_key/${ticket_key_id}    /permission_key/${API_KEY}
+    @{perm_keys}=    create list    /permission_key/1
+    #User1
+    ${USER1}=    Initialize user account    ${MT_USER1}    ${MT_PASS1}    @{perm_keys}
+    set global variable    ${USER1}
+    Update attribute should succeed    organization    ${ORG1}    ${USER1}
+    ${org_list}=    create list    ${ORG1}
+    Update attribute should succeed    aligned_organizations    ${org_list}    ${USER1}
+    #User2
+    ${USER2}=    Initialize user account    ${MT_USER2}    ${MT_PASS2}    @{perm_keys}
+    set global variable    ${USER2}
+    Update attribute should succeed    organization    ${ORG2}    ${USER2}
+    ${org_list}=    create list    ${ORG2}
+    Update attribute should succeed    aligned_organizations    ${org_list}    ${USER2}
+    #User3
+    Comment    User in both orgs
+    ${USER3}=    Initialize user account    ${MT_USER3}    ${MT_PASS3}    @{perm_keys}
+    set global variable    ${USER3}
+    Update attribute should succeed    organization    ${ORG1}    ${USER3}
+    ${org_list}=    create list    ${ORG2}    ${ORG1}
+    Update attribute should succeed    aligned_organizations    ${org_list}    ${USER3}
+    # User only for Tickets
+    #User4
+    ${USER4}=    Initialize user account    ${MT_USER4}    ${MT_PASS4}    @{perm_keys}
+    set global variable    ${USER4}
+    Update attribute should succeed    organization    ${ORG1}    ${USER4}
+    ${org_list}=    create list    ${ORG1}
+    Update attribute should succeed    aligned_organizations    ${org_list}    ${USER4}
+    #User5
+    ${USER5}=    Initialize user account    ${MT_USER5}    ${MT_PASS5}    @{perm_keys}
+    set global variable    ${USER5}
+    Update attribute should succeed    organization    ${ORG2}    ${USER5}
+    ${org_list}=    create list    ${ORG2}
+    Update attribute should succeed    aligned_organizations    ${org_list}    ${USER5}
+    #User6
+    Comment    User in both orgs
+    ${USER6}=    Initialize user account    ${MT_USER6}    ${MT_PASS6}    @{perm_keys}
+    set global variable    ${USER6}
+    Update attribute should succeed    organization    ${ORG1}    ${USER6}
+    ${org_list}=    create list    ${ORG2}    ${ORG1}
+    Update attribute should succeed    aligned_organizations    ${org_list}    ${USER6}
+
+Teardown Suite
+    request    delete    ${USER1}
+    request    delete    ${USER2}
+    request    delete    ${USER3}
+    request    delete    ${USER4}
+    request    delete    ${USER5}
+    request    delete    ${USER6}
+    request    delete    ${ORG1}
+    Run Keyword And Ignore Error    request    delete    ${ORG1}
+    request    delete    ${ORG2}
+    Tear down DB fixtures.
+
+Initialize DB.
+    ${API_KEY}=    Create api key
+    Set Global Variable    ${API_KEY}
+
+Setup API Suite.
+    Initialize DB.
+    ${FIXTURES}=    Get subdir    fixtures
+    set global variable    ${FIXTURES}
+
+Tear down DB fixtures.
+    ${keys}=    create list    ${API_KEY}
+    Tear down keys    ${keys}
