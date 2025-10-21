@@ -1,0 +1,485 @@
+*** Settings ***
+Library           ../RequestTools.py    ${SUT}    ${ENCODING}
+Library           Collections
+Library           ../AdvancedTools.py    ${SUT}    ${ENCODING}
+Library           OperatingSystem
+Library           SSHLibrary
+Variables         ../../variable_files/default_vars.py    ${SUT}
+Library           ../DatabaseTools.py    ${SUT}
+
+*** Variables ***
+${SUT}            Automation_AIO2
+${ENCODING}       json
+${TEST_USER}      glados
+${TEST_PASSWORD}    abcd1234
+@{PERM_KEYS}      /permission_key/1
+${DEFAULT_PASSWORD}    abcd1234
+${COMPARE_BUILD}    25787
+${RELEASE}        7.5
+
+*** Keywords ***
+Update attribute should fail
+    [Arguments]    ${ATTR}    ${VAL}    ${URI}    ${STRICT}=True
+    [Documentation]    This keyword negatively tests that updating an attribute fails, as expected. \
+    ${strict}=    Convert to Boolean    ${STRICT}
+    ${result}=    update attribute    ${ATTR}    ${VAL}    ${URI}    ${STRICT}
+    should not be true    ${result}
+
+Update attribute should succeed
+    [Arguments]    ${ATTR}    ${VAL}    ${URI}    ${STRICT}=True
+    [Documentation]    STRICT=True (default) will verify that the resource is updated exactly with ${VAL}
+    ...
+    ...    If STRICT=False, the contents of ${VAL} must exist within ${ATTR} after an update, however additional keys *may* also exist in ${ATTR}
+    ${strict}=    Convert to Boolean    ${STRICT}
+    ${result}=    update attribute    ${ATTR}    ${VAL}    ${URI}    ${strict}
+    should be True    ${result}
+
+Create User
+    [Arguments]    ${USERNAME}    ${PASSWORD}    ${PERMKEYS}=${None}    ${ALGO}=md5
+    add to payload    user    ${USERNAME}
+    ${password}=    hash    ${PASSWORD}    ${ALGO}
+    add to payload    passwd    ${password}
+    add to payload    email    foo@bar.com
+    add to payload    login_state    1
+    add to payload    permission_keys    ${PERMKEYS}
+    request    post    /account
+    HTTP response code should be    201
+    ${user_uri}=    get uri
+    [Return]    ${user_uri}
+
+Delete User
+    [Arguments]    ${URI}
+    request    delete    ${URI}
+    Http Response Code Should Be    200
+
+Build prefixed uri list
+    [Arguments]    @{URIS}
+    ${prefixed_uris}=    create list
+    : FOR    ${val}    IN    @{URIS}
+    \    ${prefixed_vals}=    Catenate    SEPARATOR=    ${PREFIX}    ${val}
+    \    Append to list    ${prefixed_uris}    ${prefixed_vals}
+    [Return]    ${prefixed_uris}
+
+Extended fetch matches direct query
+    [Arguments]    ${RESOURCE}    ${IGNORE_LIST}=None
+    [Documentation]    Used to verify that the results returned in a result set identically match the resource when queried directly. \ The first argument is the resource are to quest e.g. '/accounts'
+    ...
+    ...    It is sometimes necessary to ignore a particular value in the result set (such as a time field that is constantly incrementing). \ In this case also pass a list of keys to ignore. \ \ e.g. :
+    ...
+    ...    ${list}= \ \ \ \ \ *create list* \ \ \ \ duration \ \ \ \ \ percent
+    ...
+    ...    *extended fetch matches direct query* \ \ \ \ /accounts \ \ \ ${list}
+    ...
+    ...    20 results (max) are tested. \ If you would like this to become a variable, please request the functionality from Brendan.
+    ${ex_fetch_URI}=    catenate    SEPARATOR=    ${RESOURCE}    ?limit=20&extended_fetch=1
+    request    get    ${ex_fetch_URI}
+    ${num_returned}=    get payload item    total_returned
+    ${num_matched}=    get payload item    total_matched
+    Run keyword if    ${num_matched} >= 20    should be equal    ${num_returned}    20
+    Run keyword if    ${num_matched} < 20    should be equal    ${num_returned}    ${num_matched}
+    Run keyword if    ${num_returned} == 0    Set Tags    needsfixture
+    Run keyword if    ${IGNORE_LIST} == None    Extended fetch matches
+    Run keyword unless    ${IGNORE_LIST} == None    Extended fetch matches    ${None}    ${IGNORE_LIST}
+
+Filtered extended fetch matches direct query
+    [Arguments]    ${RESOURCE}    ${FILTER}    ${IGNORE_LIST}=None
+    [Documentation]    Used to verify that the results returned in a result set identically match the resource when queried directly. \ The first argument is the resource are to quest e.g. '/accounts'
+    ...
+    ...    It is sometimes necessary to ignore a particular value in the result set (such as a time field that is constantly incrementing). \ In this case also pass a list of keys to ignore. \ \ e.g. :
+    ...
+    ...    ${list}= \ \ \ \ \ *create list* \ \ \ \ duration \ \ \ \ \ percent
+    ...
+    ...    *extended fetch matches direct query* \ \ \ \ /accounts \ \ \ ${list}
+    ...
+    ...    20 results (max) are tested. \ If you would like this to become a variable, please request the functionality from Brendan.
+    ...
+    ...    ${FILTER} is used to filter the result set. \ The recieved results are tested to match this filter EXACTLY.
+    ...
+    ...    ${IGNORE_LIST} is a list of keys from the resource that are NOT required to match. \ This is useful in the case of a counter/timer that might change from query to query.
+    ${ex_fetch_URI}=    catenate    SEPARATOR=    ${RESOURCE}    ?limit=20&extended_fetch=1    ${FILTER}
+    request    get    ${ex_fetch_URI}
+    ${num_returned}=    get payload item    total_returned
+    ${num_matched}=    get payload item    total_matched
+    Run keyword if    ${num_matched} >= 20    should be equal    ${num_returned}    20
+    Run keyword if    ${num_matched} < 20    should be equal    ${num_returned}    ${num_matched}
+    Run keyword if    ${num_returned} == 0    Set Tags    needsfixture
+    Run keyword if    ${IGNORE_LIST} == None    Extended fetch matches    ${FILTER}
+    Run keyword unless    ${IGNORE_LIST} == None    Extended fetch matches    ${FILTER}    ${IGNORE_LIST}
+
+Verify limit is required
+    [Arguments]    ${RESOURCE}
+    request    get    ${RESOURCE}
+    HTTP response code should be    302
+    check response payload    total_returned    0
+    ${header}=    get response headers    x-em7-status-message
+    Should contain    ${header}    index requires a limit
+
+Resource returns search spec
+    [Arguments]    ${URI}    ${RESPONSE_CODE}=302
+    request    get    ${URI}
+    check response payload    searchspec
+    ${lookup}=    Create list    fields    searchspec
+    ${data}=    lookup    ${lookup}
+    Should be True    ${data}
+    HTTP response code should be    ${RESPONSE_CODE}
+
+Initialize user account
+    [Arguments]    ${USER}=${TEST_USER}    ${PASS}=${TEST_PASSWORD}    @{PERM_KEYS}
+    ${keys}=    Build prefixed uri list    @{PERM_KEYS}
+    Create User    ${USER}    ${PASS}    ${keys}
+    HTTP response code should be    201
+    ${USER_URI} =    Get URI
+    [Return]    ${USER_URI}
+
+Create SNMP credential
+    [Arguments]    ${NAME}    ${VERSION}    ${READ}
+    Add to payload    cred_name    ${NAME}
+    Add to payload    snmp_version    ${VERSION}
+    Add to payload    snmp_ro_community    ${READ}
+    Add to payload    cred_port    161
+    Add to payload    cred_timeout    1500
+    request    post    /credential/snmp
+    HTTP response code should be    201
+    ${CRED_URI}=    get uri
+    [Return]    ${CRED_URI}
+
+Create Org
+    [Arguments]    ${company}    ${city}=Reston
+    [Documentation]    Takes a company name and returns a URI of the new organization.
+    Add to payload    company    ${company}
+    Add to payload    city    ${city}
+    request    post    /organization
+    HTTP response code should be    201
+    ${ORG_URI}    get uri
+    [Return]    ${ORG_URI}
+
+Verify sort
+    [Arguments]    ${URI}    ${ORDER}=ASC    ${STRING_VALS}=${None}    ${USER}=${None}    ${PASSWORD}=${None}    ${ENUMS}=${None}
+    ...    ${IGNORE_LIST}=${None}
+    [Documentation]    This will still run each item in the search spec through the sort test even if there are 0 results. \ The final result is still valid, but this could be improved by short circuiting to a fail state with the needsfixutre AND noncritical tag.
+    ...
+    ...
+    ...    URI - a generic resource URI (e.g. /tickets, /vendor)
+    ...
+    ...    ORDER - ASC for ascending order. \ DESC for descending.
+    ...
+    ...    STRING_VALS - A scalar list (${list}) of keys to be explicitly treated as strings. \ The sort (python) keyword will attempt to autodetect the data type of each field to understand how it is supposed to be sorted. \ Some database fields that hold numeric data are still VARCHAR fields and need to be explicitly identified as strings for sorting.
+    ...
+    ...    ENUMS - A dictionary with its keys being field names of database enums, and values a list of the enum values (in order)
+    ...
+    ...    IGNORE_LIST - A list of fields to skip
+    ${validity}=    sort    ${URI}    ${ORDER}    ${STRING_VALS}    ${USER}    ${PASSWORD}
+    ...    ${ENUMS}    ${IGNORE_LIST}
+    Run keyword if    ${validity} is False    Set Tags    needsfixture
+
+Create fixture ticket
+    [Arguments]    ${NUM}
+    ${ticket_category}=    Grab Random Resource    /ticket_category
+    Add to payload    category    ${ticket_category}
+    ${ticket_queue}=    Grab Random Resource    /ticket_queue
+    Add to payload    ticket_queue    ${ticket_queue}
+    ${desc}=    evaluate    chr(${NUM})
+    Add to payload    description    ${desc}
+    ${x}=    Evaluate    ${NUM} % 5
+    Add to payload    severity    ${x}
+    ${x}=    Evaluate    ${NUM} % 4
+    Add to payload    status    ${x}
+    ${x}=    Evaluate    ${NUM} % 5
+    Add to payload    source    ${x}
+    ${x}=    Evaluate    ${NUM} % 5
+    Add to payload    resolution    ${x}
+    ${x}=    Evaluate    ${NUM} % 5
+    Add to payload    cause    ${x}
+    Add to payload    escalation    ${NUM}
+    Add to payload    chargeback    ${NUM}
+    Request    post    /ticket
+    HTTP response code should be    201
+    ${ticket_uri} =    get URI
+    Add to payload    date_create    ${NUM}
+    Add to payload    date_update    ${NUM}
+    Request    post    ${ticket_uri}
+    HTTP response code should be    200
+    [Return]    ${ticket_uri}
+
+Create Discovery Session Payload
+    [Arguments]    ${SNMP_CRED}    ${ORG}    ${START_IP}    ${END_IP}
+    ${col}=    get data collector
+    ${snmp_cred}=    create list    ${SNMP_CRED}
+    Add to payload    credentials    ${snmp_cred}
+    Add to payload    organization    ${ORG}
+    Add to payload    aligned_collector    ${col}
+    Add to payload    name    GLaDOS
+    Add to payload    description    the cake is a lie
+    Add to payload    scan_all_ips    1
+    Add to payload    port_scan_timeout    60000
+    Add to payload    initial_scan_level    4
+    Add to payload    scan_throttle    0
+    ${ips}=    Create Dictionary    start_ip    ${START_IP}    end_ip    ${END_IP}
+    ${ips}=    Create List    ${ips}
+    add to payload    ip_lists    ${ips}
+    ${DISC_SESS_PAYLOAD}=    get encoded payload
+    [Return]    ${DISC_SESS_PAYLOAD}
+
+Get Data Collector
+    ${cug_url}=    Get Existing Collector Group
+    request    get    ${cug_url}
+    HTTP response code should be    200
+    ${data_collectors}=    get payload item    data_collectors
+    ${appliance}=    evaluate    ${data_collectors}[0]
+    [Return]    ${appliance}
+
+Grab Random Resource
+    [Arguments]    ${resource}
+    [Documentation]    This keyword takes a partial URL for a API resource and returns the URI of a random resource instance from the SUT
+    ${resource}=    catenate    SEPARATOR=    ${resource}    ?limit=20&extended_fetch=1
+    request    get    ${resource}
+    ${uri_list}=    result set search
+    ${num_returned}=    get payload item    total_returned
+    ${random}=    Evaluate    random.randint(0, ${num_returned}-1)    random,sys
+    ${uri}=    Get from list    ${uri_list}    ${random}
+    [Return]    ${uri}    # The URI of a random resource instance
+
+Create Empty Device Template
+    [Arguments]    ${TEMPLATE_NAME}
+    Add to payload    template_name    ${template_name}
+    request    post    /device_template
+    ${DEV_TEMPLATE}=    get uri
+    HTTP response code should be    201
+    [Return]    ${DEV_TEMPLATE}
+
+Get SNMP Public V2 Cred
+    request    get    /credential/snmp?limit=1&extended_fetch=1&filter.cred_name=SNMP%20Public%20V2
+    ${results}=    result set search
+    ${SNMP_CRED}=    evaluate    ${results}[0]
+    [Return]    ${SNMP_CRED}
+
+Create Minimal Asset
+    [Arguments]    ${MAKE}    ${MODEL}    ${STATUS}    ${FUNCTION}
+    Add to payload    make    ${MAKE}
+    Add to payload    model    ${MODEL}
+    Add To Payload    status    ${STATUS}
+    Add To Payload    function    ${FUNCTION}
+    Add To Payload    serial    ${MODEL}
+    Add To Payload    asset_tag    ${MODEL}
+    Add To Payload    rfid    ${MODEL}
+    Add To Payload    room    ${MODEL}
+    Add To Payload    plate    ${MODEL}
+    Add To Payload    panel    ${MODEL}
+    Add To Payload    punch    ${MODEL}
+    Add To Payload    location    ${MAKE}
+    Add To Payload    location_notes    ${MAKE}
+    request    post    /asset
+    HTTP response code should be    201
+    ${ASSET}=    get URI
+    [Return]    ${ASSET}
+
+Create Custom Attribute
+    [Arguments]    ${ENTITY}    ${NAME}    ${LABEL}    ${TYPE}="string"    ${INDEX}="none"    ${EXTENDED}="0"
+    ...    ${ERROR_CODE}=201
+    Add to payload    name    ${NAME}
+    Add to payload    label    ${LABEL}
+    Add to payload    type    ${TYPE}
+    Add to payload    index    ${INDEX}
+    Add to payload    extended    ${EXTENDED}
+    request    post    /custom_attribute/${ENTITY}
+    HTTP response code should be    ${ERROR_CODE}
+    ${CUSTOM_ATTRIBUTE}=    Get Uri
+    [Return]    ${CUSTOM_ATTRIBUTE}
+
+Create Random Custom Attribute
+    [Arguments]    ${ENTITY}    ${EXTENDED}="0"
+    ${name}=    Evaluate    os.urandom(4).encode("hex")    os
+    ${label}=    Evaluate    os.urandom(4).encode("hex")    os
+    ${type}=    Evaluate    random.choice(['string', 'integer'])    random
+    ${index}=    Evaluate    random.choice(['none', 'index', 'unique'])    random
+    ${index}=    Evaluate    'none' if '${EXTENDED}' == "1" else '${index}'
+    ${RANDOM_ATTRIBUTE}=    Create Custom Attribute    ${ENTITY}    ${name}    ${label}    ${type}    ${index}
+    ...    ${EXTENDED}
+    [Return]    ${RANDOM_ATTRIBUTE}
+
+Post No Changes
+    [Arguments]    ${resource}    ${response_code}=200    ${EXPECTED_MESSAGE}=No changes to specified resource found in request
+    Request    get    ${resource}
+    ${payload}=    Save response payload
+    Request with payload    post    ${resource}    ${payload}
+    HTTP response code should be    ${response_code}
+    ${message}=    Get response headers    X-EM7-status-message
+    Run keyword if    ${response_code}==200    Should be equal    ${message}    ${EXPECTED_MESSAGE}
+
+Put Entity Class Files
+    [Arguments]    ${SSH_URL}    ${creation_file}    ${deletion_file}
+    Open Connection    ${SSH_URL}
+    Login    root    em7admin
+    Put File    ${FIXTURES}/${creation_file}    /usr/local/silo/gui/ap/www/    0744
+    Put File    ${FIXTURES}/${deletion_file}    /usr/local/silo/gui/ap/www/    0744
+    Close All Connections
+
+Remove Entity Class Files
+    [Arguments]    ${SSH_URL}    ${creation_file}    ${deletion_file}
+    Open Connection    ${SSH_URL}
+    Login    root    em7admin
+    Execute Command    \\rm /usr/local/silo/gui/ap/www/${creation_file}
+    Execute Command    \\rm /usr/local/silo/gui/ap/www/${deletion_file}
+    Close All Connections
+
+Create Event Policy
+    [Arguments]    ${SSH_URL}    ${ename}
+    Put Entity Class Files    ${SSH_URL}    create_event_policy.em7    delete_event_policy.em7
+    Open Connection    ${SSH_URL}
+    Login    root    em7admin
+    ${ls}=    Execute command    ls /usr/local/silo/gui/ap/www
+    Close All Connections
+    Should Contain    ${ls}    create_event_policy.em7
+    Should Contain    ${ls}    delete_event_policy.em7
+    request    get    https://${SSH_URL}/create_event_policy.em7?format=${ENCODING}&ename=${ename}
+    ${POL_ID}=    Get payload item    id
+    [Return]    ${POL_ID}
+
+Delete Event Policy
+    [Arguments]    ${SSH_URL}    ${POL_ID}
+    Put Entity Class Files    ${SSH_URL}    create_event_policy.em7    delete_event_policy.em7
+    Open Connection    ${SSH_URL}
+    Login    root    em7admin
+    ${ls}=    Execute command    ls -l /usr/local/silo/gui/ap/www
+    Log    ${ls}
+    Should Contain    ${ls}    513
+    Should Contain    ${ls}    314
+    Should Contain    ${ls}    create_event_policy.em7
+    Should Contain    ${ls}    delete_event_policy.em7
+    Wait Until Keyword Succeeds    3    1    request    get    https://${SSH_URL}/delete_event_policy.em7?format=${ENCODING}&id=${POL_ID}    body_required=${False}
+    ${ls}=    Execute command    ls -l /usr/local/silo/gui/ap/www
+    Close All Connections
+    Log    ${ls}
+    Remove Entity Class Files    ${SSH_URL}    create_event_policy.em7    delete_event_policy.em7
+    [Teardown]
+
+Create Device Group Rule
+    [Arguments]    ${SSH_URL}    ${DGID}
+    Put Entity Class Files    ${SSH_URL}    create_device_group_rule.em7    delete_device_group_rule.em7
+    request    get    https://${SSH_URL}/create_device_group_rule.em7?format=${ENCODING}&dgid=${DGID}
+    ${RULE_ID}=    Get payload item    id
+    [Return]    ${RULE_ID}
+
+Delete Device Group Rule
+    [Arguments]    ${SSH_URL}    ${RULE_ID}
+    request    get    https://${SSH_URL}/delete_device_group_rule.em7?format=${ENCODING}&id=${RULE_ID}    body_required=${False}
+    Remove Entity Class Files    ${SSH_URL}    create_device_group_rule.em7    delete_device_group_rule.em7
+
+Create Dynamic App
+    [Arguments]    ${SSH_URL}    ${app_name}    ${app_type}
+    Put Entity Class Files    ${SSH_URL}    create_dynamic_app.em7    delete_dynamic_app.em7
+    request    get    https://${SSH_URL}/create_dynamic_app.em7?format=${ENCODING}&name=${app_name}&app_type=${app_type}
+    ${POL_ID}=    Get payload item    id
+    ${APP_GUID}=    Get payload item    app_guid
+    [Return]    ${POL_ID}    ${APP_GUID}
+
+Delete Dynamic App
+    [Arguments]    ${SSH_URL}    ${APP_ID}
+    request    get    https://${SSH_URL}/delete_dynamic_app.em7?format=${ENCODING}&id=${APP_ID}    body_required=${False}
+    Remove Entity Class Files    ${SSH_URL}    create_dynamic_app.em7    delete_dynamic_app.em7
+
+Find Event
+    [Arguments]    ${message}
+    request    get    /event?limit=10&filter.message=${message}
+    ${returned}=    Get payload item    total_returned
+    Should be equal    ${returned}    1
+    ${uri_path}=    Create list    URI    result_set
+    ${EVENT_URI}=    lookup    ${uri_path}
+    Set suite variable    ${EVENT_URI}
+
+Get Device URI
+    [Arguments]    ${device_query}
+    [Documentation]    ${device_query} should be a URI request to the /device resource with the appropriate filters or limit that returns a single device as a URI, i.e. not using extended fetch.
+    request    get    ${device_query}
+    ${returned}=    get payload item    total_returned
+    should be equal    ${returned}    1
+    ${uri_path}=    create list    URI    result_set
+    ${DEVICE_URI}=    lookup    ${uri_path}
+    [Return]    ${DEVICE_URI}
+
+Delete Device
+    [Arguments]    ${device}
+    request    delete    ${device}
+    HTTP response code should be    302
+    ${deletion}=    Get Response Headers    location
+    Set suite variable    ${deletion}
+    Wait until keyword succeeds    180    2    Device deletion completed
+
+Device Deletion Completed
+    request    get    ${deletion}
+    HTTP response code should be    200
+    ${message}=    get payload item    message
+    Should be equal    ${message}    Deletion process complete
+
+Create Ticket State
+    [Arguments]    ${name}
+    Add to payload    name    ${name}
+    request    post    /ticket_state
+    ${ticket_state}=    get uri
+    [Return]    ${ticket_state}
+
+Create API-key Only User
+    ${MIN_KEY}=    Create API key
+    ${API_PERM}=    Catenate    SEPARATOR=    /permission_key/    ${MIN_KEY}
+    @{API_ONLY}=    Create list    ${API_PERM}
+    ${API_USERNAME}=    Catenate    test
+    ${API_USERPASS}=    Catenate    test
+    request    get    /account?limit=50&extended_fetch=1&filter.user=${API_USERNAME}
+    @{api_users}=    Result Set Search
+    : FOR    ${user}    IN    @{api_users}
+    \    request    delete    ${user}
+    \    Http Response Code Should Be    200
+    ${API_USER}=    Initialize user account    ${API_USERNAME}    ${API_USERPASS}    @{API_ONLY}
+    [Return]    ${API_USER}    ${API_USERNAME}    ${API_USERPASS}
+
+Delete API-key Only User
+    @{keys}=    Find API Keys
+    : FOR    ${key}    IN    @{keys}
+    \    Tear Down Keys    ${key}
+    request    delete    ${API_USER}
+    HTTP response code should be    200
+
+Create Virtual Device
+    [Arguments]    ${name}    ${org}=${None}    ${cug}=${None}    ${dev_class}=${None}
+    ${default_org}=    Catenate    SEPARATOR=    ${PREFIX}    /organization/0
+    ${default_cug}=    Get Existing Collector Group
+    ${default_dev_class}=    Get Random Virtual Device Class
+    ${org}=    evaluate    '${org}' if '${org}' != '${None}' else '${default_org}'
+    ${cug}=    evaluate    '${cug}' if '${cug}' != '${None}' else '${default_cug}'
+    ${dev_class}=    evaluate    '${dev_class}' if '${dev_class}' != '${None}' else '${default_dev_class}'
+    Add to payload    name    ${name}
+    Add to payload    organization    ${org}
+    Add to payload    collector_group    ${cug}
+    Add to payload    class_type    ${dev_class}
+    request    post    /device
+    HTTP response code should be    201
+    ${device_uri}=    get uri
+    [Return]    ${device_uri}
+
+Get Existing Collector Group
+    request    get    /collector_group?limit=1&extended_fetch=1
+    ${cug_url}=    result set search
+    ${cug_url}=    evaluate    ${cug_url}[0]
+    [Return]    ${cug_url}
+
+Get Random Virtual Device Class
+    request    get    /device_class?limit=10&extended_fetch=1&filter.class=Virtual%20Device
+    ${results}=    result set search
+    ${dev_class}=    evaluate    random.choice(${results})    random
+    [Return]    ${dev_class}
+
+Data performance returns value
+    [Arguments]    ${query_string}
+    [Documentation]    /data_performance${query_string} should return at least one result.
+    ...
+    ...    ${query_string} will be the rest of the URI, including the location and the variables, e.g. "raw/device/filesystem?duration=20m&data_fields=d_used" for the raw fs data.
+    request    get    /data_performance${query_string}
+    HTTP response code should be    200
+    ${num_ret}=    Get Payload Item    result_set
+    Should be True    ${num_ret}
+
+Find HR: CPU Presentation ID
+    request    get    /dynamic_app/snippet_performance/232296730F74319D6765D79118603276/presentation_object?limit=1&filter.name.contains=Average&extended_fetch=1
+    ${CPU_PRES}=    Result set search
+    ${CPU_PRES}=    Evaluate    ${CPU_PRES}[0].split("/")[-1]
+    [Return]    ${CPU_PRES}
