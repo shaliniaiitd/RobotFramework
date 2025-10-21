@@ -1,0 +1,465 @@
+
+| Fixture Type                     | Scope         | Runs When                                                | Typical Use                                              |
+| -------------------------------- | ------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| **Suite Setup / Suite Teardown** | Suite-level   | Before and after *all test cases in a file or directory* | Start/stop environment, connect to DB, open browser once |
+| **Test Setup / Test Teardown**   | Test-level    | Before and after *each individual test case*             | Login/logout, reset state, clear data                    |
+| **Keyword Setup / Teardown**     | Keyword-level | Before and after a specific keyword                      | Advanced use (rarely needed)                             |
+
+*** Settings ***
+Suite Setup       Initialize Suite
+Suite Teardown    Cleanup Suite
+Test Setup        Login As Admin
+Test Teardown     Logout
+Resource          common_keywords.robot
+
+*** Test Cases ***
+Verify user creation
+    Create User    test_user
+    Verify User Exists    test_user
+
+Verify user deletion
+    Delete User    test_user
+    Verify User Not Exists    test_user
+
+*** Keywords ***
+Initialize Suite
+    Log    Starting test suite — connecting to DB
+
+Cleanup Suite
+    Log    Cleaning up suite — disconnecting DB
+
+Login As Admin
+    Log    Logging in as admin
+
+Logout
+    Log    Logging out
+
+
+Initialize Suite
+↓
+Login As Admin
+→ Create User
+→ Verify User Exists
+Logout
+↓
+Login As Admin
+→ Delete User
+→ Verify User Not Exists
+Logout
+↓
+Cleanup Suite
+
+
+Perfect follow-up, Shalini 👏 — this is where Robot Framework’s test setup and teardown system really clicks, especially if you already understand **fixtures** from Python (like in `pytest` or `unittest`).
+
+Let’s go step by step and see **how fixtures work in Robot Framework** — what they are, how to define them, and how to control their scope.
+
+---
+
+## 🧩 What “fixtures” mean in Robot Framework
+
+In Robot Framework, **fixtures** are not called “fixtures,” but they serve the same purpose.
+
+Instead, they’re implemented through:
+
+* `Suite Setup` / `Suite Teardown`
+* `Test Setup` / `Test Teardown`
+* (and sometimes `Setup` / `Teardown` at the **keyword** level)
+
+These are **hooks** that run automatically **before or after tests or suites** — like `pytest`’s `@pytest.fixture(scope="session")` or `setup_method()` in `unittest`.
+
+---
+
+## ⚙️ 1. Fixture Scopes in Robot Framework
+
+| Fixture Type                     | Scope         | Runs When                                                | Typical Use                                              |
+| -------------------------------- | ------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| **Suite Setup / Suite Teardown** | Suite-level   | Before and after *all test cases in a file or directory* | Start/stop environment, connect to DB, open browser once |
+| **Test Setup / Test Teardown**   | Test-level    | Before and after *each individual test case*             | Login/logout, reset state, clear data                    |
+| **Keyword Setup / Teardown**     | Keyword-level | Before and after a specific keyword                      | Advanced use (rarely needed)                             |
+
+---
+
+## 🧠 2. Example — All Fixture Levels
+
+```robot
+*** Settings ***
+Suite Setup       Initialize Suite
+Suite Teardown    Cleanup Suite
+Test Setup        Login As Admin
+Test Teardown     Logout
+Resource          common_keywords.robot
+
+*** Test Cases ***
+Verify user creation
+    Create User    test_user
+    Verify User Exists    test_user
+
+Verify user deletion
+    Delete User    test_user
+    Verify User Not Exists    test_user
+
+*** Keywords ***
+Initialize Suite
+    Log    Starting test suite — connecting to DB
+
+Cleanup Suite
+    Log    Cleaning up suite — disconnecting DB
+
+Login As Admin
+    Log    Logging in as admin
+
+Logout
+    Log    Logging out
+```
+
+### 🔁 Test Execution Flow
+
+```
+Initialize Suite
+↓
+Login As Admin
+→ Create User
+→ Verify User Exists
+Logout
+↓
+Login As Admin
+→ Delete User
+→ Verify User Not Exists
+Logout
+↓
+Cleanup Suite
+```
+
+So:
+
+* `Initialize Suite` runs **once at the start**.
+* `Login As Admin` + `Logout` run **before and after each test**.
+* `Cleanup Suite` runs **once at the end**.
+
+---
+
+## 🧰 3. Local Fixture Overrides
+
+You can **override** suite-level fixtures inside a test case.
+
+For example:
+
+```robot
+*** Test Cases ***
+Verify public endpoint
+    [Setup]    Log    This test has no login
+    GET    /public/health
+    [Teardown]    Log    Done with public check
+```
+
+Here:
+
+* `[Setup]` and `[Teardown]` apply **only** to this test case.
+* They override `Test Setup` and `Test Teardown` defined in the `*** Settings ***` section.
+
+---
+
+## 🧱 4. Fixtures in Resource Files
+
+If you use **resource files** (like `mt_common.txt`), you can define reusable setup keywords there too.
+
+Example: `common_keywords.robot`
+
+```robot
+*** Keywords ***
+Initialize Suite
+    Connect To Database
+    Load Configurations
+```
+
+Then in your test suite:
+
+```robot
+*** Settings ***
+Suite Setup    Initialize Suite
+Resource       common_keywords.robot
+```
+
+This is equivalent to **importing a fixture helper** in pytest:
+
+```python
+from common_keywords import initialize_suite
+```
+
+---
+
+## 🧩 5. Nested Suites (Important!)
+
+If you organize tests in directories, each directory can have an **`__init__.robot`** file that defines suite-level setup/teardown for *all tests inside it.*
+
+Example structure:
+
+```
+tests/
+│
+├── __init__.robot           # Suite Setup/Teardown for entire test directory
+├── api/
+│   ├── __init__.robot       # Setup/Teardown for API tests
+│   ├── user_tests.robot
+│   └── org_tests.robot
+└── ui/
+    ├── __init__.robot       # Setup/Teardown for UI tests
+    └── login_tests.robot
+```
+
+Each `__init__.robot` can have its own:
+
+```robot
+*** Settings ***
+Suite Setup    Connect To API
+Suite Teardown Disconnect From API
+```
+
+So you can have **hierarchical fixtures**:
+
+* `tests/__init__.robot` — global setup (e.g. start services)
+* `tests/api/__init__.robot` — API setup (e.g. authenticate)
+* `tests/api/user_tests.robot` — individual test setup
+
+---
+
+## 💡 6. Real-World Example (API test analogy)
+
+### Robot Framework
+
+```robot
+*** Settings ***
+Suite Setup       Start API Server
+Suite Teardown    Stop API Server
+Test Setup        Create Session
+Test Teardown     Delete Session
+```
+
+### Pytest Equivalent
+
+```python
+import pytest
+
+@pytest.fixture(scope="session", autouse=True)
+def start_api_server():
+    print("Start API Server")
+    yield
+    print("Stop API Server")
+
+@pytest.fixture(autouse=True)
+def manage_session():
+    print("Create Session")
+    yield
+    print("Delete Session")
+```
+
+---
+
+## ✅ 7. Summary Table
+
+| Robot Framework Fixture  | Scope                 | Similar Pytest Fixture             | Purpose                  |
+| ------------------------ | --------------------- | ---------------------------------- | ------------------------ |
+| `Suite Setup`            | Once per suite        | `@pytest.fixture(scope="session")` | Prepare test environment |
+| `Suite Teardown`         | Once after suite      | Session teardown                   | Cleanup after all tests  |
+| `Test Setup`             | Before each test      | Function-level fixture             | Per-test initialization  |
+| `Test Teardown`          | After each test       | Function-level teardown            | Per-test cleanup         |
+| `[Setup]` / `[Teardown]` | For one specific test | Fixture override                   | Custom per-test setup    |
+
+---
+
+Would you like me to show how to **parameterize** a fixture keyword (e.g., pass environment name, credentials, etc.) — like how pytest fixtures take parameters? It’s a nice next step once you’re comfortable with setup/teardown basics.
+
+Perfect — this is a great next step, Shalini 👏
+
+Let’s go hands-on and see **how to define and use fixtures (setups/teardowns)** both **within the same `.robot` file** and **across multiple files**.
+
+We’ll do this in two parts:
+1️⃣ Using fixtures *inside the same file*
+2️⃣ Sharing fixtures *across multiple files* (via `Resource` imports)
+
+---
+
+## 🧩 1️⃣ Using a Fixture Inside the Same `.robot` File
+
+This is the simplest case — you define both the fixture **and** the tests in the same file.
+
+```robot
+*** Settings ***
+Suite Setup       Initialize Environment
+Suite Teardown    Cleanup Environment
+Test Setup        Login As Admin
+Test Teardown     Logout
+
+*** Test Cases ***
+Verify user creation
+    Create User    test_user
+    Verify User Exists    test_user
+
+Verify user deletion
+    Delete User    test_user
+    Verify User Not Exists    test_user
+
+*** Keywords ***
+Initialize Environment
+    Log    Connecting to test database
+    Log    Starting backend service
+
+Cleanup Environment
+    Log    Shutting down backend service
+    Log    Disconnecting from database
+
+Login As Admin
+    Log    Logging in as admin
+
+Logout
+    Log    Logging out
+```
+
+### 🔁 Execution flow
+
+1. `Initialize Environment` runs once at the start (suite-level).
+2. `Login As Admin` runs before each test.
+3. Each test runs.
+4. `Logout` runs after each test.
+5. `Cleanup Environment` runs once at the end.
+
+---
+
+## 🧩 2️⃣ Using a Fixture Across Multiple Files
+
+Let’s say you want to reuse the same setup/teardown logic across many test files (a common pattern in large suites).
+You do that by moving the fixture keywords into a **separate Resource file**, then **importing** it.
+
+---
+
+### 🗂 Folder Structure
+
+```
+tests/
+├── common/
+│   └── shared_fixtures.robot
+├── api/
+│   ├── user_tests.robot
+│   └── org_tests.robot
+```
+
+---
+
+### 📄 `common/shared_fixtures.robot`
+
+This is your **fixture file** (like a shared `conftest.py` in pytest).
+
+```robot
+*** Keywords ***
+Initialize API Suite
+    Log    Starting API environment setup
+    Create API Session    base_url=http://localhost:8080
+
+Cleanup API Suite
+    Log    Cleaning up API environment
+    Delete All Test Data
+
+Login As Admin
+    Log    Logging in as Admin user
+    # Here you can call an API or open a browser if needed
+
+Logout
+    Log    Logging out Admin user
+```
+
+---
+
+### 📄 `api/user_tests.robot`
+
+Now you **import** and use those fixtures from the resource file.
+
+```robot
+*** Settings ***
+Resource          ../common/shared_fixtures.robot
+Suite Setup       Initialize API Suite
+Suite Teardown    Cleanup API Suite
+Test Setup        Login As Admin
+Test Teardown     Logout
+
+*** Test Cases ***
+Verify user creation
+    Create User    test_user
+    Verify User Exists    test_user
+
+Verify user deletion
+    Delete User    test_user
+    Verify User Not Exists    test_user
+```
+
+✅ Robot will automatically import and execute those fixture keywords even though they live in a different file.
+
+---
+
+### 📄 `api/org_tests.robot`
+
+You can reuse the same fixture logic in another test file:
+
+```robot
+*** Settings ***
+Resource          ../common/shared_fixtures.robot
+Suite Setup       Initialize API Suite
+Suite Teardown    Cleanup API Suite
+Test Setup        Login As Admin
+Test Teardown     Logout
+
+*** Test Cases ***
+Verify organization access
+    Create Org    org1
+    Verify Org Access    org1
+```
+
+So both `user_tests.robot` and `org_tests.robot` use the **same fixture definitions** from `shared_fixtures.robot`.
+
+---
+
+## 🧠 Optional: Using Fixtures in `__init__.robot`
+
+If you have multiple suites under a directory and want a **shared suite-level fixture**, you can define it once in an `__init__.robot` file.
+
+Example:
+
+```
+tests/
+├── __init__.robot
+├── api/
+│   ├── user_tests.robot
+│   └── org_tests.robot
+```
+
+**`__init__.robot`:**
+
+```robot
+*** Settings ***
+Suite Setup       Global Suite Setup
+Suite Teardown    Global Suite Teardown
+Resource          common/shared_fixtures.robot
+
+*** Keywords ***
+Global Suite Setup
+    Log    Starting all API suites
+
+Global Suite Teardown
+    Log    Done with all API suites
+```
+
+Then Robot automatically applies those fixtures to **every suite** (file) inside `tests/`.
+
+---
+
+## ✅ Summary Table
+
+| Use Case                                       | How to Implement                                     | File Example                                   |
+| ---------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------- |
+| **Fixture in same file**                       | Define setup/teardown keywords in same `.robot` file | `Suite Setup  Initialize Environment`          |
+| **Fixture shared across files**                | Move keywords to a `Resource` file and import it     | `Resource  ../common/shared_fixtures.robot`    |
+| **Fixture for multiple suites (folder-level)** | Use `__init__.robot` in a directory                  | Defines setup/teardown for that folder’s tests |
+
+---
+
+If you’d like, I can show you a **complete running example** (you can copy–paste and run it with `robot`) that prints the setup/teardown order so you can visualize fixture scope in action. Would you like me to create that demo?
